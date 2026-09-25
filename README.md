@@ -144,31 +144,6 @@ preenchida: é só clicar em **Salvar**.
 4. Cole a lista de códigos na área tracejada
 5. Clique em **🚀 INICIAR AUTOMAÇÃO** e acompanhe o robô trabalhar
 
-## 📁 Estrutura do repositório
-
-| Arquivo | Função |
-|---|---|
-| `automatizador.js` | O coração do projeto: interface + todos os robôs de automação |
-| `index.html` | Página de instalação (GitHub Pages) com o botão de arrastar |
-| `carregar.html` | Janela auxiliar usada nos portais que bloqueiam busca de arquivos |
-| `aviso.txt` | Mensagens exibidas no painel de todos os usuários |
-| `README.md` | Este documento |
-
-## 🔧 Manutenção (para o mantenedor)
-
-**Atualizar um robô ou a interface** — edite o `automatizador.js` e faça commit. Todos recebem no
-próximo clique. Nos portais que usam os caminhos alternativos, a mudança leva cerca de um minuto
-a mais, porque o GitHub Pages precisa republicar.
-
-**Publicar um aviso para a equipe** — escreva a mensagem no `aviso.txt` e faça commit. Para
-remover o aviso, deixe o arquivo vazio.
-
-**Adicionar um convênio novo** — inclua o robô no objeto `robos`, cadastre a ficha dele em
-`infoRobos` (ícone, cor, descrição e modo de entrada), acrescente a logo em `LOGOS` e adicione o
-card na lista `EXIBICAO`, mantendo a ordem alfabética.
-
-**Ligar o GitHub Pages** — necessário para a página de instalação e para os caminhos alternativos
-do carregador: Settings → Pages → Branch `main`, pasta `/ (root)` → Save.
 
 ## ⚠️ Uso e responsabilidade
 
