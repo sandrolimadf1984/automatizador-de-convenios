@@ -6405,7 +6405,7 @@
     //  ele desiste em silêncio e os robôs seguem funcionando.
     // ══════════════════════════════════════════════════════════════════
     (() => {
-        const ENDERECO_CONTADOR = "";
+        const ENDERECO_CONTADOR = "https://automatizador-377a9-default-rtdb.firebaseio.com";
 
         try {
             const BASE = String(ENDERECO_CONTADOR || '').trim().replace(/\/+$/, '');
