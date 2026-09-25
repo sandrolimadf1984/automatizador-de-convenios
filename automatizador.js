@@ -72,8 +72,8 @@
                 <div style="font-size:15px;font-weight:700;color:#e8f1ff;letter-spacing:2px;line-height:1.1;">CENTRAL DE</div>
                 <div style="font-size:26px;font-weight:800;color:#4dc3ff;letter-spacing:2px;line-height:1.1;text-shadow:0 0 12px rgba(77,195,255,0.55);">AUTOMAÇÃO</div>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;background:#0e1a2e;border:1px solid #223a5e;border-radius:16px;padding:5px 12px;font-size:10px;font-weight:700;color:#cfe0ff;letter-spacing:1px;">
-                <span style="width:8px;height:8px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;"></span>ONLINE
+            <div id="adc-selo-online" title="Clique para ver quem está usando agora" style="display:flex;align-items:center;gap:6px;background:#0e1a2e;border:1px solid #223a5e;border-radius:16px;padding:5px 12px;font-size:10px;font-weight:700;color:#cfe0ff;letter-spacing:1px;cursor:pointer;">
+                <span style="width:8px;height:8px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;"></span>ONLINE<span id="adc-online-num" style="margin-left:4px;color:#7ee3a0;font-weight:800;"></span>
             </div>
         </div>
 
@@ -255,7 +255,7 @@
         };
         const iniciar = ev => {
             const alvo = ev.target;
-            if (alvo.closest('button, textarea, input, select, a, .adc-card, .adc-rz, #adc-fechar-app, #adc-marcador, #adc-voltar, #adc-j-fechar, #adc-lista')) return;
+            if (alvo.closest('button, textarea, input, select, a, .adc-card, .adc-rz, #adc-fechar-app, #adc-marcador, #adc-voltar, #adc-j-fechar, #adc-lista, #adc-selo-online')) return;
             // clique em cima de barra de rolagem: deixa o navegador cuidar
             if (alvo.nodeType === 1 && (ev.offsetX > alvo.clientWidth || ev.offsetY > alvo.clientHeight)) return;
             const p = ev.touches ? ev.touches[0] : ev;
@@ -6379,5 +6379,308 @@
             }
         });
         limpar.onclick = () => { campo.value = ''; filtrar(); campo.focus(); };
+    })();
+
+    // ══════════════════════════════════════════════════════════════════
+    //  CONTADOR DE ACESSOS  (acrescentado em set/2026)
+    //
+    //  Clique no selo ONLINE do cabeçalho: abre um quadrinho ao lado do
+    //  painel mostrando quantas pessoas estão com a ferramenta aberta
+    //  NESTE MOMENTO, e embaixo o histórico de acessos.
+    //
+    //  ┌── ONDE COLAR O ENDEREÇO DO CONTADOR ─────────────────────────┐
+    //  │ Na linha ENDERECO_CONTADOR logo abaixo, cole o endereço do   │
+    //  │ seu banco do Firebase, entre as aspas. Enquanto ela estiver  │
+    //  │ vazia, o quadrinho abre e avisa que o contador ainda não foi │
+    //  │ configurado — e NADA mais muda: todos os robôs continuam     │
+    //  │ funcionando exatamente igual.                                │
+    //  └──────────────────────────────────────────────────────────────┘
+    //
+    //  Nada de pessoal é guardado: apenas um código embaralhado do
+    //  computador, a data do acesso e a contagem. Nenhum nome, nenhum
+    //  login, nenhum dado de paciente, nenhum endereço de portal.
+    //
+    //  Este bloco é fechado em si mesmo e todo protegido: se a internet
+    //  falhar, se o portal bloquear a consulta ou se der qualquer erro,
+    //  ele desiste em silêncio e os robôs seguem funcionando.
+    // ══════════════════════════════════════════════════════════════════
+    (() => {
+        const ENDERECO_CONTADOR = "";
+
+        try {
+            const BASE = String(ENDERECO_CONTADOR || '').trim().replace(/\/+$/, '');
+            const ligado = /^https?:\/\//i.test(BASE);
+            const VIVO = 90000;        // presença conta como "online" por 90s
+            const VELHO = 900000;      // presença de mais de 15 min é lixo, apaga
+
+            const embaralhar = txt => {
+                let h = 5381;
+                for (let i = 0; i < txt.length; i++) h = ((h * 33) ^ txt.charCodeAt(i)) >>> 0;
+                return h.toString(36);
+            };
+
+            // Código do computador. Sai das características da máquina, e não
+            // da memória do navegador, para o mesmo computador contar UMA vez
+            // mesmo usando portais diferentes.
+            const idMaquina = (() => {
+                const partes = [];
+                try { partes.push(screen.width + 'x' + screen.height); } catch (e) { }
+                try { partes.push(screen.availWidth + 'x' + screen.availHeight); } catch (e) { }
+                try { partes.push(String(screen.colorDepth)); } catch (e) { }
+                try { partes.push(String(navigator.hardwareConcurrency || '')); } catch (e) { }
+                try { partes.push(String(navigator.deviceMemory || '')); } catch (e) { }
+                try { partes.push(String(navigator.language || '')); } catch (e) { }
+                try { partes.push(String(navigator.platform || '')); } catch (e) { }
+                try { partes.push(String(new Date().getTimezoneOffset())); } catch (e) { }
+                try { partes.push(String(navigator.userAgent || '').slice(0, 120)); } catch (e) { }
+                return 'm' + embaralhar(partes.join('|'));
+            })();
+            const apelido = 'PC-' + idMaquina.slice(-4).toUpperCase();
+            const idSessao = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+            const endereco = caminho => BASE + '/adc/' + caminho + '.json';
+
+            const pedir = (metodo, caminho, dados) => {
+                const opcoes = { method: metodo, cache: 'no-store' };
+                if (dados !== undefined) {
+                    opcoes.headers = { 'Content-Type': 'application/json' };
+                    opcoes.body = JSON.stringify(dados);
+                }
+                return fetch(endereco(caminho), opcoes).then(r => {
+                    if (!r.ok) throw new Error('resposta ' + r.status);
+                    return r.text().then(t => (t ? JSON.parse(t) : null));
+                });
+            };
+
+            const marcarPresenca = () => {
+                if (!ligado) return;
+                pedir('PUT', 'presenca/' + idSessao, { t: Date.now(), m: idMaquina }).catch(() => { });
+            };
+
+            const registrarAcesso = () => {
+                if (!ligado) return;
+                pedir('GET', 'maquinas/' + idMaquina).then(atual => {
+                    const n = (atual && typeof atual.n === 'number') ? atual.n + 1 : 1;
+                    return pedir('PUT', 'maquinas/' + idMaquina, { n: n, u: Date.now(), a: apelido });
+                }).catch(() => { });
+                marcarPresenca();
+            };
+
+            const sairDaPresenca = () => {
+                if (!ligado) return;
+                try { fetch(endereco('presenca/' + idSessao), { method: 'DELETE', keepalive: true }); } catch (e) { }
+            };
+
+            const consultar = () => Promise.all([
+                pedir('GET', 'presenca').then(v => ({ ok: true, v: v })).catch(() => ({ ok: false })),
+                pedir('GET', 'maquinas').then(v => ({ ok: true, v: v })).catch(() => ({ ok: false }))
+            ]).then(resp => {
+                // Se as duas consultas falharam, isso NAO e "ninguem online":
+                // e o portal ou a internet barrando. Precisa avisar direito.
+                if (!resp[0].ok && !resp[1].ok) throw new Error('sem resposta do contador');
+                const presenca = resp[0].v, maquinas = resp[1].v;
+                const agora = Date.now();
+                let online = 0;
+                const maquinasOnline = {};
+                if (presenca && typeof presenca === 'object') {
+                    Object.keys(presenca).forEach(k => {
+                        const p = presenca[k] || {};
+                        const t = typeof p.t === 'number' ? p.t : 0;
+                        if (agora - t < VIVO) {
+                            online++;
+                            if (p.m) maquinasOnline[p.m] = true;
+                        } else if (agora - t > VELHO) {
+                            pedir('DELETE', 'presenca/' + k).catch(() => { });
+                        }
+                    });
+                }
+                let acessos = 0, computadores = 0;
+                const lista = [];
+                if (maquinas && typeof maquinas === 'object') {
+                    Object.keys(maquinas).forEach(k => {
+                        const m = maquinas[k] || {};
+                        const n = typeof m.n === 'number' ? m.n : 0;
+                        computadores++;
+                        acessos += n;
+                        lista.push({
+                            nome: m.a || ('PC-' + String(k).slice(-4).toUpperCase()),
+                            n: n,
+                            u: typeof m.u === 'number' ? m.u : 0,
+                            online: !!maquinasOnline[k],
+                            eu: k === idMaquina
+                        });
+                    });
+                    lista.sort((a, b) => b.u - a.u);
+                }
+                return {
+                    online: online,
+                    computadoresOnline: Object.keys(maquinasOnline).length,
+                    acessos: acessos,
+                    computadores: computadores,
+                    lista: lista
+                };
+            });
+
+            // ── o quadrinho ao lado do painel ──────────────────────────
+            let quadro = null, seguir = null, atualizador = null;
+            const selo = document.getElementById('adc-selo-online');
+            const numeroNoSelo = document.getElementById('adc-online-num');
+
+            const quando = ms => {
+                if (!ms) return '—';
+                const s = Math.floor((Date.now() - ms) / 1000);
+                if (s < 60) return 'agora há pouco';
+                if (s < 3600) return 'há ' + Math.floor(s / 60) + ' min';
+                if (s < 86400) return 'há ' + Math.floor(s / 3600) + ' h';
+                return 'há ' + Math.floor(s / 86400) + ' dia(s)';
+            };
+
+            const posicionar = () => {
+                if (!quadro) return;
+                try {
+                    const r = menu.getBoundingClientRect();
+                    const larg = 244;
+                    let esq = r.right + 10;
+                    if (esq + larg > window.innerWidth) esq = Math.max(6, r.left - larg - 10);
+                    quadro.style.left = esq + 'px';
+                    quadro.style.top = Math.max(6, r.top) + 'px';
+                    quadro.style.maxHeight = Math.max(220, Math.min(r.height, window.innerHeight - 16)) + 'px';
+                } catch (e) { }
+            };
+
+            const linhaNumero = (rotulo, valor, cor) =>
+                '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:3px 0;">' +
+                '<span style="font-size:10.5px;color:#8fa8cf;">' + rotulo + '</span>' +
+                '<b style="font-size:16px;color:' + cor + ';">' + valor + '</b></div>';
+
+            const desenhar = dados => {
+                if (!quadro) return;
+                const corpo = quadro.querySelector('#adc-cont-corpo');
+                if (!corpo) return;
+                if (!dados) {
+                    corpo.innerHTML = '<div style="font-size:11px;color:#f0a500;line-height:1.5;">' +
+                        'Não consegui falar com o contador nesta página.<br><br>' +
+                        'Isso acontece em portais que bloqueiam consultas externas. ' +
+                        'Os robôs continuam funcionando normalmente.</div>';
+                    return;
+                }
+                let html = '<div style="font-size:9.5px;letter-spacing:1.2px;color:#7f97bd;font-weight:700;margin-bottom:4px;">AGORA</div>';
+                html += linhaNumero('Pessoas com a ferramenta aberta', dados.online, '#2ecc71');
+                html += linhaNumero('Computadores diferentes agora', dados.computadoresOnline, '#2ecc71');
+                html += '<div style="height:1px;background:#1d3557;margin:11px 0 9px;"></div>';
+                html += '<div style="font-size:9.5px;letter-spacing:1.2px;color:#7f97bd;font-weight:700;margin-bottom:4px;">HISTÓRICO</div>';
+                html += linhaNumero('Total de acessos', dados.acessos, '#4dc3ff');
+                html += linhaNumero('Computadores diferentes', dados.computadores, '#4dc3ff');
+                if (dados.lista.length) {
+                    html += '<div style="height:1px;background:#1d3557;margin:11px 0 8px;"></div>';
+                    html += '<div style="font-size:9.5px;letter-spacing:1.2px;color:#7f97bd;font-weight:700;margin-bottom:6px;">COMPUTADORES</div>';
+                    dados.lista.slice(0, 40).forEach(m => {
+                        html += '<div style="display:flex;align-items:center;gap:6px;margin:4px 0;font-size:10.5px;">' +
+                            '<span style="width:6px;height:6px;border-radius:50%;flex:0 0 auto;background:' +
+                            (m.online ? '#2ecc71' : '#3d5a85') + ';"></span>' +
+                            '<span style="flex:1;color:' + (m.eu ? '#4dc3ff' : '#cfe0ff') + ';">' + m.nome +
+                            (m.eu ? ' (este)' : '') + '</span>' +
+                            '<span style="color:#8fa8cf;">' + m.n + '×</span>' +
+                            '<span style="color:#6b82a8;font-size:9.5px;min-width:64px;text-align:right;">' + quando(m.u) + '</span>' +
+                            '</div>';
+                    });
+                }
+                html += '<div style="margin-top:12px;font-size:9px;color:#6b82a8;line-height:1.45;">' +
+                    'A contagem de computadores é aproximada: máquinas idênticas podem ser contadas como uma só.</div>';
+                corpo.innerHTML = html;
+            };
+
+            const atualizarSelo = dados => {
+                if (!numeroNoSelo) return;
+                numeroNoSelo.textContent = (dados && typeof dados.online === 'number' && dados.online > 0)
+                    ? ('· ' + dados.online) : '';
+            };
+
+            const buscarEDesenhar = () => {
+                if (!ligado) {
+                    desenharNaoConfigurado();
+                    return;
+                }
+                marcarPresenca();
+                consultar().then(d => { desenhar(d); atualizarSelo(d); })
+                    .catch(() => { desenhar(null); });
+            };
+
+            const desenharNaoConfigurado = () => {
+                if (!quadro) return;
+                const corpo = quadro.querySelector('#adc-cont-corpo');
+                if (!corpo) return;
+                corpo.innerHTML = '<div style="font-size:11px;color:#f0a500;line-height:1.6;">' +
+                    '<b>Contador ainda não configurado.</b><br><br>' +
+                    'Falta colar o endereço do banco na linha <b>ENDERECO_CONTADOR</b>, ' +
+                    'lá no começo do bloco do contador dentro do arquivo ' +
+                    '<b>automatizador.js</b>.<br><br>' +
+                    'Enquanto isso, todos os robôs funcionam normalmente.</div>';
+            };
+
+            const fecharQuadro = () => {
+                if (seguir) { clearInterval(seguir); seguir = null; }
+                if (atualizador) { clearInterval(atualizador); atualizador = null; }
+                if (quadro) { try { quadro.remove(); } catch (e) { } quadro = null; }
+            };
+
+            const abrirQuadro = () => {
+                quadro = document.createElement('div');
+                quadro.id = 'adc-contador';
+                quadro.style.cssText = 'position:fixed;width:244px;z-index:2147483647;' +
+                    'background:linear-gradient(180deg,#0c1322 0%,#0a0f1c 100%);' +
+                    'border:1px solid #1d3557;border-radius:14px;padding:12px 13px;' +
+                    'box-shadow:0 0 0 1px rgba(45,125,255,0.22),0 14px 40px rgba(0,0,0,0.65);' +
+                    "font-family:'Segoe UI',system-ui,Arial,sans-serif;color:#dbe7ff;" +
+                    'overflow:auto;cursor:default;';
+                quadro.innerHTML =
+                    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">' +
+                    '<div style="flex:1;font-size:11px;font-weight:800;letter-spacing:1.2px;color:#cfe0ff;">QUEM ESTÁ USANDO</div>' +
+                    '<div id="adc-cont-recarregar" title="Atualizar" style="cursor:pointer;font-size:12px;color:#8fa8cf;padding:0 4px;">⟳</div>' +
+                    '<div id="adc-cont-fechar" title="Fechar" style="cursor:pointer;font-size:14px;color:#8fa8cf;padding:0 2px;">✕</div>' +
+                    '</div>' +
+                    '<div id="adc-cont-corpo" style="font-size:11px;color:#8fa8cf;">Consultando…</div>';
+                document.body.appendChild(quadro);
+                posicionar();
+                seguir = setInterval(posicionar, 200);
+                quadro.querySelector('#adc-cont-fechar').onclick = fecharQuadro;
+                quadro.querySelector('#adc-cont-recarregar').onclick = buscarEDesenhar;
+                buscarEDesenhar();
+                atualizador = setInterval(buscarEDesenhar, 15000);
+            };
+
+            if (selo) {
+                selo.addEventListener('click', ev => {
+                    ev.stopPropagation();
+                    if (quadro) fecharQuadro(); else abrirQuadro();
+                });
+            }
+
+            // Registra o acesso e mantém a presença viva enquanto o app
+            // estiver aberto. Se não houver endereço configurado, nada disso
+            // chega a acontecer.
+            if (ligado) {
+                registrarAcesso();
+                const batida = setInterval(marcarPresenca, 30000);
+                const seloVivo = setInterval(() => {
+                    consultar().then(atualizarSelo).catch(() => { });
+                }, 60000);
+                consultar().then(atualizarSelo).catch(() => { });
+
+                const encerrar = () => {
+                    try { clearInterval(batida); } catch (e) { }
+                    try { clearInterval(seloVivo); } catch (e) { }
+                    fecharQuadro();
+                    sairDaPresenca();
+                };
+                try { window.addEventListener('beforeunload', sairDaPresenca); } catch (e) { }
+                try {
+                    const btnFechar = document.getElementById('adc-fechar-app');
+                    if (btnFechar) btnFechar.addEventListener('click', encerrar);
+                } catch (e) { }
+            }
+        } catch (e) {
+            try { console.warn('[Automatizador] contador de acessos desligado:', e.message); } catch (e2) { }
+        }
     })();
 })();
