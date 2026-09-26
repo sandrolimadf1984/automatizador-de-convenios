@@ -6408,6 +6408,21 @@
         const ENDERECO_CONTADOR = "https://automatizador-377a9-default-rtdb.firebaseio.com";
 
         try {
+            // ── Relógios próprios (set/2026) ──────────────────────────
+            // O motor de fundo do app TROCA o setInterval/setTimeout da página
+            // enquanto uma automação roda, e ao terminar ele limpa a fila dele.
+            // Se o contador usasse os relógios trocados, as tarefas dele iriam
+            // parar nessa fila e sumiriam junto. Guardamos os relógios de
+            // verdade agora, antes de qualquer troca, e usamos só eles.
+            const marcar = window.setInterval.bind(window);
+            const desmarcar = window.clearInterval.bind(window);
+            const adiar = window.setTimeout.bind(window);
+
+            // Enquanto uma automação estiver rodando, o contador fica PARADO:
+            // nada de rede, nada de conta, nada de desenhar. O trabalho do
+            // atendente tem prioridade absoluta.
+            const emAutomacao = () => { try { return !!rodando; } catch (e) { return false; } };
+
             const BASE = String(ENDERECO_CONTADOR || '').trim().replace(/\/+$/, '');
             const ligado = /^https?:\/\//i.test(BASE);
             const VIVO = 90000;        // presença conta como "online" por 90s
@@ -6453,7 +6468,7 @@
             };
 
             const marcarPresenca = () => {
-                if (!ligado) return;
+                if (!ligado || emAutomacao()) return;
                 pedir('PUT', 'presenca/' + idSessao, { t: Date.now(), m: idMaquina }).catch(() => { });
             };
 
@@ -6523,6 +6538,7 @@
 
             // ── o quadrinho ao lado do painel ──────────────────────────
             let quadro = null, seguir = null, atualizador = null;
+            let olhoTamanho = null, olhoLugar = null;
             const selo = document.getElementById('adc-selo-online');
             const numeroNoSelo = document.getElementById('adc-online-num');
 
@@ -6619,8 +6635,12 @@
             };
 
             const fecharQuadro = () => {
-                if (seguir) { clearInterval(seguir); seguir = null; }
-                if (atualizador) { clearInterval(atualizador); atualizador = null; }
+                if (seguir) { desmarcar(seguir); seguir = null; }
+                if (atualizador) { desmarcar(atualizador); atualizador = null; }
+                if (olhoTamanho) { try { olhoTamanho.disconnect(); } catch (e) { } olhoTamanho = null; }
+                if (olhoLugar) { try { olhoLugar.disconnect(); } catch (e) { } olhoLugar = null; }
+                try { window.removeEventListener('resize', posicionar); } catch (e) { }
+                try { window.removeEventListener('scroll', posicionar, true); } catch (e) { }
                 if (quadro) { try { quadro.remove(); } catch (e) { } quadro = null; }
             };
 
@@ -6642,11 +6662,27 @@
                     '<div id="adc-cont-corpo" style="font-size:11px;color:#8fa8cf;">Consultando…</div>';
                 document.body.appendChild(quadro);
                 posicionar();
-                seguir = setInterval(posicionar, 200);
+                // Em vez de espiar a tela 5 vezes por segundo, o navegador
+                // AVISA quando o painel muda de lugar ou de tamanho. Fica bem
+                // mais leve e responde na hora. A batida lenta é só reserva,
+                // para navegador que não suporte o aviso.
+                try {
+                    if (window.ResizeObserver) {
+                        olhoTamanho = new ResizeObserver(posicionar);
+                        olhoTamanho.observe(menu);
+                    }
+                } catch (e) { }
+                try {
+                    olhoLugar = new MutationObserver(posicionar);
+                    olhoLugar.observe(menu, { attributes: true, attributeFilter: ['style'] });
+                } catch (e) { }
+                try { window.addEventListener('resize', posicionar); } catch (e) { }
+                try { window.addEventListener('scroll', posicionar, true); } catch (e) { }
+                seguir = marcar(posicionar, 2000);
                 quadro.querySelector('#adc-cont-fechar').onclick = fecharQuadro;
                 quadro.querySelector('#adc-cont-recarregar').onclick = buscarEDesenhar;
                 buscarEDesenhar();
-                atualizador = setInterval(buscarEDesenhar, 15000);
+                atualizador = marcar(buscarEDesenhar, 15000);
             };
 
             if (selo) {
@@ -6661,15 +6697,16 @@
             // chega a acontecer.
             if (ligado) {
                 registrarAcesso();
-                const batida = setInterval(marcarPresenca, 30000);
-                const seloVivo = setInterval(() => {
+                const batida = marcar(marcarPresenca, 30000);
+                const seloVivo = marcar(() => {
+                    if (emAutomacao()) return;
                     consultar().then(atualizarSelo).catch(() => { });
                 }, 60000);
                 consultar().then(atualizarSelo).catch(() => { });
 
                 const encerrar = () => {
-                    try { clearInterval(batida); } catch (e) { }
-                    try { clearInterval(seloVivo); } catch (e) { }
+                    try { desmarcar(batida); } catch (e) { }
+                    try { desmarcar(seloVivo); } catch (e) { }
                     fecharQuadro();
                     sairDaPresenca();
                 };
