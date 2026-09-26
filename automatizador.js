@@ -6437,7 +6437,10 @@
             // Código do computador. Sai das características da máquina, e não
             // da memória do navegador, para o mesmo computador contar UMA vez
             // mesmo usando portais diferentes.
-            const idMaquina = (() => {
+            // As CARACTERÍSTICAS da máquina (tela, navegador, sistema). Na
+            // recepção as máquinas são clones, então isto sai IGUAL em todas —
+            // por isso sozinho ele não serve para contar computadores.
+            const caracteristicas = (() => {
                 const partes = [];
                 try { partes.push(screen.width + 'x' + screen.height); } catch (e) { }
                 try { partes.push(screen.availWidth + 'x' + screen.availHeight); } catch (e) { }
@@ -6448,9 +6451,86 @@
                 try { partes.push(String(navigator.platform || '')); } catch (e) { }
                 try { partes.push(String(new Date().getTimezoneOffset())); } catch (e) { }
                 try { partes.push(String(navigator.userAgent || '').slice(0, 120)); } catch (e) { }
-                return 'm' + embaralhar(partes.join('|'));
+                return embaralhar(partes.join('|'));
             })();
-            const apelido = 'PC-' + idMaquina.slice(-4).toUpperCase();
+
+            // ── Número de série do navegador (set/2026) ──────────────────
+            // Máquinas iguais têm características iguais, então antes elas
+            // viravam UMA só na contagem. Agora cada navegador sorteia um
+            // número de série na primeira vez e guarda para sempre. É isso
+            // que separa um computador do outro, mesmo sendo idênticos.
+            const CHAVE_SERIE = 'adc-serie-do-computador';
+            const serie = (() => {
+                try {
+                    let s = localStorage.getItem(CHAVE_SERIE);
+                    if (!s) {
+                        s = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+                        localStorage.setItem(CHAVE_SERIE, s);
+                    }
+                    return s;
+                } catch (e) {
+                    // Navegador sem memória local (janela anônima, por exemplo):
+                    // volta a valer só as características, como era antes.
+                    return '';
+                }
+            })();
+
+            // Nome que a pessoa deu ao computador, se deu.
+            const CHAVE_NOME = 'adc-nome-do-computador';
+            const lerNome = () => {
+                try { return (localStorage.getItem(CHAVE_NOME) || '').trim().slice(0, 28); }
+                catch (e) { return ''; }
+            };
+            const gravarNome = v => {
+                try { localStorage.setItem(CHAVE_NOME, String(v || '').trim().slice(0, 28)); }
+                catch (e) { }
+            };
+
+            const idMaquina = 'm' + embaralhar(caracteristicas + '|' + serie);
+
+            // ── IP da internet (set/2026) ────────────────────────────────
+            // Serve para saber DE ONDE o computador acessou, e não para
+            // contar computadores: todas as máquinas da mesma unidade saem
+            // pela mesma internet, então compartilham este endereço. Quem
+            // separa um computador do outro é o número de série acima.
+            //
+            // A consulta é opcional: se o portal bloquear ou o serviço não
+            // responder, o app segue igual e o local fica como "sem endereço".
+            const CHAVE_IP = 'adc-ip-do-local';
+            let meuIP = '';
+            try { meuIP = (localStorage.getItem(CHAVE_IP) || '').slice(0, 45); } catch (e) { }
+
+            const buscarIP = () => {
+                const fontes = [
+                    ['https://api.ipify.org?format=json', r => (JSON.parse(r) || {}).ip],
+                    ['https://api.db-ip.com/v2/free/self', r => (JSON.parse(r) || {}).ipAddress],
+                    ['https://www.cloudflare.com/cdn-cgi/trace', r => {
+                        const m = String(r).match(/(?:^|\n)ip=([^\n]+)/);
+                        return m ? m[1].trim() : '';
+                    }]
+                ];
+                const tentar = i => {
+                    if (i >= fontes.length) return Promise.resolve('');
+                    const alvo = fontes[i][0], ler = fontes[i][1];
+                    return fetch(alvo, { cache: 'no-store' })
+                        .then(r => { if (!r.ok) throw new Error('resposta ' + r.status); return r.text(); })
+                        .then(txt => {
+                            const ip = String(ler(txt) || '').trim();
+                            if (!/^[0-9a-fA-F:.]{7,45}$/.test(ip)) throw new Error('endereco estranho');
+                            return ip;
+                        })
+                        .catch(() => tentar(i + 1));
+                };
+                return tentar(0).then(ip => {
+                    if (ip) {
+                        meuIP = ip;
+                        try { localStorage.setItem(CHAVE_IP, ip); } catch (e) { }
+                    }
+                    return ip;
+                }).catch(() => '');
+            };
+            let meuNome = lerNome();
+            const apelido = () => meuNome || ('PC-' + idMaquina.slice(-4).toUpperCase());
             const idSessao = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
             const endereco = caminho => BASE + '/adc/' + caminho + '.json';
@@ -6476,7 +6556,8 @@
                 if (!ligado) return;
                 pedir('GET', 'maquinas/' + idMaquina).then(atual => {
                     const n = (atual && typeof atual.n === 'number') ? atual.n + 1 : 1;
-                    return pedir('PUT', 'maquinas/' + idMaquina, { n: n, u: Date.now(), a: apelido });
+                    return pedir('PUT', 'maquinas/' + idMaquina,
+                        { n: n, u: Date.now(), a: apelido(), ip: meuIP || '' });
                 }).catch(() => { });
                 marcarPresenca();
             };
@@ -6512,24 +6593,56 @@
                 let acessos = 0, computadores = 0;
                 const lista = [];
                 if (maquinas && typeof maquinas === 'object') {
+                    // Quando a pessoa deu NOME ao computador, ele vale mais que
+                    // o número de série: o mesmo computador usado em portais
+                    // diferentes vira um só na lista, em vez de aparecer duas
+                    // vezes. Sem nome, cada série conta como um computador.
+                    const juntos = {};
                     Object.keys(maquinas).forEach(k => {
                         const m = maquinas[k] || {};
+                        const nomeDele = (m.a || '').trim();
+                        const chave = nomeDele ? ('nome:' + nomeDele.toLowerCase()) : ('id:' + k);
                         const n = typeof m.n === 'number' ? m.n : 0;
+                        const u = typeof m.u === 'number' ? m.u : 0;
+                        if (!juntos[chave]) {
+                            juntos[chave] = {
+                                nome: nomeDele || ('PC-' + String(k).slice(-4).toUpperCase()),
+                                n: 0, u: 0, online: false, eu: false, ip: ''
+                            };
+                        }
+                        const j = juntos[chave];
+                        j.n += n;
+                        if (u > j.u) j.u = u;
+                        if (maquinasOnline[k]) j.online = true;
+                        if (k === idMaquina) j.eu = true;
+                        if (!j.ip && m.ip) j.ip = String(m.ip);
+                    });
+                    Object.keys(juntos).forEach(c => {
                         computadores++;
-                        acessos += n;
-                        lista.push({
-                            nome: m.a || ('PC-' + String(k).slice(-4).toUpperCase()),
-                            n: n,
-                            u: typeof m.u === 'number' ? m.u : 0,
-                            online: !!maquinasOnline[k],
-                            eu: k === idMaquina
-                        });
+                        acessos += juntos[c].n;
+                        lista.push(juntos[c]);
                     });
                     lista.sort((a, b) => b.u - a.u);
                 }
+                // Mesma regra para quem está online agora: se duas telas abertas
+                // têm o mesmo nome de computador, é um computador só.
+                let onlineAgrupado = {};
+                Object.keys(maquinasOnline).forEach(k => {
+                    const m = (maquinas && maquinas[k]) || {};
+                    const nomeDele = (m.a || '').trim();
+                    onlineAgrupado[nomeDele ? ('nome:' + nomeDele.toLowerCase()) : ('id:' + k)] = true;
+                });
+                // Quantas REDES diferentes já usaram a ferramenta. Cada unidade
+                // (ou uma casa) tem o seu endereço de internet, então isto conta
+                // os LOCAIS, não os computadores.
+                const locais = {};
+                lista.forEach(m => { if (m.ip) locais[m.ip] = (locais[m.ip] || 0) + 1; });
                 return {
                     online: online,
-                    computadoresOnline: Object.keys(maquinasOnline).length,
+                    computadoresOnline: Object.keys(onlineAgrupado).length,
+                    locais: locais,
+                    quantosLocais: Object.keys(locais).length,
+                    meuIP: meuIP || '',
                     acessos: acessos,
                     computadores: computadores,
                     lista: lista
@@ -6586,22 +6699,61 @@
                 html += '<div style="height:1px;background:#1d3557;margin:11px 0 9px;"></div>';
                 html += '<div style="font-size:9.5px;letter-spacing:1.2px;color:#7f97bd;font-weight:700;margin-bottom:4px;">HISTÓRICO</div>';
                 html += linhaNumero('Computadores diferentes', dados.computadores, '#4dc3ff');
+                if (dados.quantosLocais) {
+                    html += linhaNumero('Redes diferentes (locais)', dados.quantosLocais, '#4dc3ff');
+                }
                 if (dados.lista.length) {
                     html += '<div style="height:1px;background:#1d3557;margin:11px 0 8px;"></div>';
                     html += '<div style="font-size:9.5px;letter-spacing:1.2px;color:#7f97bd;font-weight:700;margin-bottom:6px;">COMPUTADORES</div>';
+                    // Cada rede ganha uma letra (A, B, C...), para dar para ver
+                    // num relance quais computadores estão no mesmo lugar sem
+                    // precisar ler o endereço inteiro.
+                    const letraDoLocal = {};
+                    let proximaLetra = 0;
+                    Object.keys(dados.locais || {}).forEach(ip => {
+                        letraDoLocal[ip] = String.fromCharCode(65 + (proximaLetra++ % 26));
+                    });
                     dados.lista.slice(0, 40).forEach(m => {
+                        const marca = m.ip ? letraDoLocal[m.ip] : '';
                         html += '<div style="display:flex;align-items:center;gap:6px;margin:4px 0;font-size:10.5px;">' +
                             '<span style="width:6px;height:6px;border-radius:50%;flex:0 0 auto;background:' +
                             (m.online ? '#2ecc71' : '#3d5a85') + ';"></span>' +
                             '<span style="flex:1;color:' + (m.eu ? '#4dc3ff' : '#cfe0ff') + ';">' + m.nome +
                             (m.eu ? ' (este)' : '') + '</span>' +
+                            (marca ? '<span title="rede ' + m.ip + '" style="flex:0 0 auto;background:#16243c;color:#8fa8cf;' +
+                                'border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;">' + marca + '</span>' : '') +
                             '<span style="color:#8fa8cf;">' + m.n + '×</span>' +
                             '<span style="color:#6b82a8;font-size:9.5px;min-width:64px;text-align:right;">' + quando(m.u) + '</span>' +
                             '</div>';
                     });
+                    // legenda das redes, com o endereço de cada uma
+                    const ips = Object.keys(dados.locais || {});
+                    if (ips.length) {
+                        html += '<div style="margin-top:8px;font-size:9px;color:#6b82a8;line-height:1.6;">';
+                        ips.forEach(ip => {
+                            html += '<div><b style="color:#8fa8cf;">' + letraDoLocal[ip] + '</b> · ' + ip +
+                                ' · ' + dados.locais[ip] + ' computador' + (dados.locais[ip] > 1 ? 'es' : '') +
+                                (ip === dados.meuIP ? ' <span style="color:#4dc3ff;">(esta rede)</span>' : '') + '</div>';
+                        });
+                        html += '</div>';
+                    }
                 }
-                html += '<div style="margin-top:12px;font-size:9px;color:#6b82a8;line-height:1.45;">' +
-                    'A contagem de computadores é aproximada: máquinas idênticas podem ser contadas como uma só.</div>';
+                html += '<div style="height:1px;background:#1d3557;margin:12px 0 9px;"></div>';
+                html += '<div style="font-size:9.5px;letter-spacing:1.2px;color:#7f97bd;font-weight:700;margin-bottom:5px;">NOME DESTE COMPUTADOR</div>';
+                html += '<div style="display:flex;gap:5px;align-items:center;">' +
+                    '<input id="adc-cont-nome" type="text" maxlength="28" placeholder="Ex.: Recepção 1" value="' +
+                    String(meuNome).replace(/"/g, '&quot;') + '" ' +
+                    'style="flex:1;min-width:0;background:#0b1526;border:1px solid #24559b;border-radius:8px;' +
+                    'padding:6px 9px;color:#eaf3ff;font-size:11px;font-family:inherit;outline:none;">' +
+                    '<button id="adc-cont-salvar" style="flex:0 0 auto;padding:6px 11px;border:none;border-radius:8px;' +
+                    'background:#2d7dff;color:#fff;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;">Salvar</button>' +
+                    '</div>';
+                html += '<div style="margin-top:9px;font-size:9px;color:#6b82a8;line-height:1.45;">' +
+                    'Dê um nome a cada computador da unidade. É o nome que separa um do outro na lista ' +
+                    'e junta o mesmo computador quando ele é usado em portais diferentes.<br><br>' +
+                    'A letra ao lado do nome é a rede de onde o computador acessou. Computadores da ' +
+                    'mesma unidade compartilham a mesma rede, por isso ela mostra o LOCAL e não o ' +
+                    'computador.</div>';
                 corpo.innerHTML = html;
             };
 
@@ -6680,6 +6832,29 @@
                 seguir = marcar(posicionar, 2000);
                 quadro.querySelector('#adc-cont-fechar').onclick = fecharQuadro;
                 quadro.querySelector('#adc-cont-recarregar').onclick = buscarEDesenhar;
+                // O campo do nome é redesenhado a cada atualização, então o
+                // clique é escutado no quadro inteiro, e não no botão em si.
+                quadro.addEventListener('click', ev => {
+                    const bt = ev.target.closest && ev.target.closest('#adc-cont-salvar');
+                    if (!bt) return;
+                    const campo = quadro.querySelector('#adc-cont-nome');
+                    if (!campo) return;
+                    meuNome = String(campo.value || '').trim().slice(0, 28);
+                    gravarNome(meuNome);
+                    bt.textContent = 'Salvo';
+                    if (ligado) {
+                        pedir('PUT', 'maquinas/' + idMaquina + '/a', meuNome)
+                            .then(buscarEDesenhar).catch(() => { });
+                    }
+                });
+                quadro.addEventListener('keydown', ev => {
+                    if (ev.key !== 'Enter') return;
+                    const campo = ev.target.closest && ev.target.closest('#adc-cont-nome');
+                    if (!campo) return;
+                    ev.preventDefault();
+                    const bt = quadro.querySelector('#adc-cont-salvar');
+                    if (bt) bt.click();
+                });
                 buscarEDesenhar();
                 atualizador = marcar(buscarEDesenhar, 15000);
             };
@@ -6695,7 +6870,9 @@
             // estiver aberto. Se não houver endereço configurado, nada disso
             // chega a acontecer.
             if (ligado) {
-                registrarAcesso();
+                // Pega o endereço da internet primeiro, para o registro já
+                // nascer com o local certo. Se não vier, registra sem ele.
+                buscarIP().then(registrarAcesso).catch(registrarAcesso);
                 const batida = marcar(marcarPresenca, 30000);
                 const seloVivo = marcar(() => {
                     if (emAutomacao()) return;
