@@ -66,14 +66,14 @@
     telaHome.innerHTML = `
         <div style="position:absolute;top:8px;right:14px;font-size:7px;letter-spacing:0.6px;color:#f5c518;text-shadow:0 0 6px rgba(245,197,24,0.45);font-weight:700;">CRIADO POR SANDRO DE LIMA PEREIRA</div>
 
-        <div class="adc-arrasta" style="display:flex;align-items:center;gap:12px;margin-top:10px;">
+        <div class="adc-arrasta" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
             <div style="font-size:36px;line-height:1;filter:drop-shadow(0 0 8px rgba(77,195,255,0.6));">🤖</div>
             <div style="flex:1;">
                 <div style="font-size:15px;font-weight:700;color:#e8f1ff;letter-spacing:2px;line-height:1.1;">CENTRAL DE</div>
                 <div style="font-size:26px;font-weight:800;color:#4dc3ff;letter-spacing:2px;line-height:1.1;text-shadow:0 0 12px rgba(77,195,255,0.55);">AUTOMAÇÃO</div>
             </div>
-            <div id="adc-selo-online" title="Clique para ver quem está usando agora" style="display:flex;align-items:center;gap:6px;background:#0e1a2e;border:1px solid #223a5e;border-radius:16px;padding:5px 12px;font-size:10px;font-weight:700;color:#cfe0ff;letter-spacing:1px;cursor:pointer;">
-                <span style="width:8px;height:8px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;"></span>ONLINE<span id="adc-online-num" style="margin-left:4px;color:#7ee3a0;font-weight:800;"></span>
+            <div id="adc-selo-online" title="Clique para ver quem está usando agora" style="display:inline-flex;flex:0 0 auto;flex-wrap:nowrap;white-space:nowrap;align-items:center;justify-content:center;gap:5px;background:#0e1a2e;border:1px solid #223a5e;border-radius:16px;padding:5px 10px;font-size:10px;line-height:1;font-weight:700;color:#cfe0ff;letter-spacing:0.5px;cursor:pointer;">
+                <span style="width:8px;height:8px;flex:0 0 auto;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;"></span><span style="flex:0 0 auto;">ONLINE</span><span id="adc-online-num" style="flex:0 0 auto;color:#7ee3a0;font-weight:800;letter-spacing:0;"></span>
             </div>
         </div>
 
@@ -6585,7 +6585,6 @@
                 html += linhaNumero('Computadores diferentes agora', dados.computadoresOnline, '#2ecc71');
                 html += '<div style="height:1px;background:#1d3557;margin:11px 0 9px;"></div>';
                 html += '<div style="font-size:9.5px;letter-spacing:1.2px;color:#7f97bd;font-weight:700;margin-bottom:4px;">HISTÓRICO</div>';
-                html += linhaNumero('Total de acessos', dados.acessos, '#4dc3ff');
                 html += linhaNumero('Computadores diferentes', dados.computadores, '#4dc3ff');
                 if (dados.lista.length) {
                     html += '<div style="height:1px;background:#1d3557;margin:11px 0 8px;"></div>';
@@ -6609,7 +6608,7 @@
             const atualizarSelo = dados => {
                 if (!numeroNoSelo) return;
                 numeroNoSelo.textContent = (dados && typeof dados.online === 'number' && dados.online > 0)
-                    ? ('· ' + dados.online) : '';
+                    ? String(dados.online) : '';
             };
 
             const buscarEDesenhar = () => {
