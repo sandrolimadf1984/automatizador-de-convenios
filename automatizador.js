@@ -6385,12 +6385,12 @@
     //
     //  Na PRIMEIRA vez que alguém abre a ferramenta num computador,
     //  aparece uma caixinha pedindo UNIDADE e APELIDO. O registro passa
-    //  a se chamar unidade+apelido — por exemplo: nucleobandeiranteCleanel.
+    //  a se chamar unidade+apelido, tudo junto e sem acento.
     //
     //  Se a mesma pessoa trocar de máquina e escrever a mesma unidade e
     //  o mesmo apelido, cai no MESMO registro: continua contando como um
-    //  só. Maiúscula, acento e espaço não atrapalham ("Núcleo Bandeirante"
-    //  e "nucleobandeirante" são a mesma coisa).
+    //  só. Maiúscula, acento e espaço não atrapalham: o mesmo nome escrito
+    //  de jeitos diferentes cai sempre no mesmo registro.
     //
     //  Junto de cada registro ficam guardados os endereços de internet e
     //  as máquinas de onde aquele nome já entrou — é assim que você vê,
@@ -6425,7 +6425,7 @@
                 return h.toString(36);
             };
 
-            // tira acento, espaço, maiúscula e pontuação: "Núcleo Bandeirante" → "nucleobandeirante"
+            // tira acento, espaço, maiúscula e pontuação: "São Judas" → "saojudas"
             const limpar = t => {
                 let s = String(t == null ? '' : t);
                 try { s = s.normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch (e) { }
@@ -6709,8 +6709,8 @@
                     'depois a ferramenta abre direto.');
                 paragrafo('Se você trocar de máquina, é só escrever os mesmos dois e o Automatizador ' +
                     'reconhece que é você.', '#6b82a8');
-                const unid = campo('UNIDADE', 'Ex.: Núcleo Bandeirante');
-                const apel = campo('APELIDO', 'Ex.: Cleanel');
+                const unid = campo('UNIDADE', 'EX: NOME DA UNIDADE');
+                const apel = campo('APELIDO', 'ESCREVA AQUI SEU NOME');
                 const erro = criar('div', { color: '#e05260', fontSize: '12.5px', marginTop: '9px', display: 'none' });
                 caixa.appendChild(erro);
                 const b = botao('OK', true);
