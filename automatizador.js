@@ -6384,8 +6384,8 @@
     //  IDENTIFICAÇÃO E CONTROLE DE ACESSO
     //
     //  Na PRIMEIRA vez que alguém abre a ferramenta num computador,
-    //  aparece uma caixinha pedindo UNIDADE e APELIDO. O registro passa
-    //  a se chamar unidade+apelido, tudo junto e sem acento.
+    //  aparece uma caixinha pedindo UNIDADE e NOME. O registro passa
+    //  a se chamar unidade+nome, tudo junto e sem acento.
     //
     //  Se a mesma pessoa trocar de máquina e escrever a mesma unidade e
     //  o mesmo apelido, cai no MESMO registro: continua contando como um
@@ -6677,10 +6677,9 @@
             };
             const telaBloqueado = () => {
                 tirarApp(); abrirCaixa();
-                topo('⛔', 'Bloqueado', '#e05260');
-                paragrafo('Este nome foi bloqueado para usar a ferramenta. Se você acha que é engano, fale com o Sandro.');
+                topo('⛔', 'Acesso indisponível', '#e05260');
+                paragrafo('Acesso indisponível');
                 botao('Fechar', false).addEventListener('click', () => { fecharCaixa(); tirarApp(); });
-                rodape('Nome deste registro: ' + (eu ? eu.chave : '—'));
             };
             const telaLiberado = () => {
                 if (!caixa) { tirarApp(); abrirCaixa(); }
@@ -6705,12 +6704,12 @@
             const perguntarQuemE = aoConfirmar => {
                 abrirCaixa();
                 topo('👋', 'Primeiro acesso neste computador');
-                paragrafo('Escreva a sua unidade e o seu apelido. É só desta vez neste computador — ' +
+                paragrafo('Escreva a sua unidade e o seu nome. É só desta vez neste computador — ' +
                     'depois a ferramenta abre direto.');
                 paragrafo('Se você trocar de máquina, é só escrever os mesmos dois e o Automatizador ' +
                     'reconhece que é você.', '#6b82a8');
                 const unid = campo('UNIDADE', 'EX: NOME DA UNIDADE');
-                const apel = campo('APELIDO', 'ESCREVA AQUI SEU NOME');
+                const apel = campo('NOME', 'ESCREVA AQUI SEU NOME');
                 const erro = criar('div', { color: '#e05260', fontSize: '12.5px', marginTop: '9px', display: 'none' });
                 caixa.appendChild(erro);
                 const b = botao('OK', true);

@@ -133,10 +133,8 @@
                     '<p>Da próxima vez ele já reconhece você, sem perguntar nada.</p>');
                 setTimeout(function () { try { window.close(); } catch (e) { } }, 2500);
             } else if (estado === 'bloqueado') {
-                tela('⛔', 'Bloqueado', 'vm',
-                    '<div class="quem"><b>' + escapar(eu.nome) + '</b>' +
-                    '<span>' + escapar(eu.chave) + '</span></div>' +
-                    '<p>Este nome foi bloqueado. Se você acha que é engano, fale com o Sandro.</p>');
+                tela('⛔', 'Acesso indisponível', 'vm', '<p>Acesso indisponível</p>');
+                pe.textContent = '';
             } else {
                 tela('🔒', 'Esperando liberação', 'am',
                     '<div class="quem"><b>' + escapar(eu.nome) + '</b>' +
