@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Identificação — Automatizador de Convênios</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#080d17;color:#dbe7ff;font-family:'Segoe UI',system-ui,Arial,sans-serif;
+       font-size:14.5px;line-height:1.55;padding:24px 20px;}
+  .topo{display:flex;align-items:center;gap:11px;margin-bottom:15px;}
+  .emo{font-size:30px;line-height:1;}
+  .tit{font-size:17px;font-weight:800;letter-spacing:.3px;color:#4dc3ff;}
+  .tit.vd{color:#2ecc71;} .tit.am{color:#f5c518;} .tit.vm{color:#e05260;}
+  p{color:#a8bddf;margin-bottom:12px;}
+  .quem{background:#0e1a2e;border:1px solid #1d3557;border-radius:10px;
+        padding:12px 14px;margin-bottom:14px;}
+  .quem b{display:block;color:#dbe7ff;font-size:15px;}
+  .quem span{font-family:Consolas,ui-monospace,monospace;font-size:11.5px;color:#4dc3ff;}
+  .pe{font-size:11px;color:#4e6690;margin-top:16px;padding-top:12px;border-top:1px solid rgba(29,53,87,.6);}
+</style>
+</head>
+<body>
+<div class="topo"><div class="emo" id="emo">👋</div><div class="tit" id="tit">Registrando…</div></div>
+<div id="corpo"><p>Um instante.</p></div>
+<div class="pe" id="pe"></div>
+<script>
+// Esta página serve para portais que proíbem a própria página de falar com
+// o painel (o convênio da PM é um). Lá a ferramenta não consegue registrar
+// nem consultar sozinha — então ela abre esta janelinha, que roda dentro do
+// GitHub, onde a consulta é permitida.
+//
+// Ela também GUARDA aqui o nome da pessoa. Como o endereço do GitHub é o
+// mesmo para todos os portais, a pessoa só se identifica uma vez.
+(function () {
+    var PAINEL = "https://automatizador-377a9-default-rtdb.firebaseio.com";
+    var BASE = String(PAINEL || '').trim().replace(/\/+$/, '');
+
+    var emo = document.getElementById('emo');
+    var tit = document.getElementById('tit');
+    var corpo = document.getElementById('corpo');
+    var pe = document.getElementById('pe');
+
+    function tela(icone, titulo, classe, html) {
+        emo.textContent = icone;
+        tit.textContent = titulo;
+        tit.className = 'tit' + (classe ? ' ' + classe : '');
+        corpo.innerHTML = html;
+    }
+    function escapar(t) {
+        return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function contar(o) { var n = 0, k; for (k in (o || {})) n++; return n; }
+
+    var eu = null;
+    try {
+        var h = String(location.hash || '').replace(/^#/, '');
+        if (h) eu = JSON.parse(decodeURIComponent(h));
+    } catch (e) { eu = null; }
+
+    if (!eu || !eu.chave) {
+        tela('🤖', 'Automatizador de Convênios', '',
+            '<p>Esta janelinha é usada pela ferramenta na primeira vez que alguém se identifica. ' +
+            'Não precisa abrir ela à mão.</p>');
+        return;
+    }
+
+    // guarda aqui, no GitHub: vale para todos os portais
+    try { window.localStorage.setItem('adc.identificacao', JSON.stringify({
+        chave: eu.chave, nome: eu.nome, unidade: eu.unidade, apelido: eu.apelido
+    })); } catch (e) { }
+
+    pe.textContent = 'Registro: ' + eu.chave + (eu.ip ? '  ·  ' + eu.ip : '');
+
+    function responder(dados) {
+        try { if (window.opener) window.opener.postMessage(dados, '*'); } catch (e) { }
+    }
+    function pedirAoPainel(metodo, caminho, corpoDados) {
+        var op = { method: metodo, cache: 'no-store' };
+        if (corpoDados !== undefined) {
+            op.headers = { 'Content-Type': 'application/json' };
+            op.body = JSON.stringify(corpoDados);
+        }
+        return fetch(BASE + '/adc4/' + caminho + '.json', op).then(function (r) {
+            if (!r.ok) throw new Error('resposta ' + r.status);
+            return r.text();
+        }).then(function (t) { return t ? JSON.parse(t) : null; });
+    }
+    function hoje() {
+        var d = new Date(), z = function (n) { return (n < 10 ? '0' : '') + n; };
+        return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
+    }
+    function ipChave(ip) { return String(ip || 'desconhecido').replace(/[.$#\[\]\/]/g, '-'); }
+
+    Promise.all([
+        pedirAoPainel('GET', 'config').catch(function () { return null; }),
+        pedirAoPainel('GET', 'pcs/' + eu.chave).catch(function () { return null; })
+    ]).then(function (r) {
+        var cfg = r[0] || {}, reg = r[1];
+        var estado = reg ? (reg.estado || 'pendente') : 'pendente';
+        var liberado;
+        if (estado === 'bloqueado') liberado = false;
+        else if (cfg.fechado === true && estado !== 'ok') { liberado = false; estado = 'pendente'; }
+        else { liberado = true; estado = 'ok'; }
+
+        var dia = hoje(), ips = {}, maqs = {}, hist = {}, k;
+        if (reg && reg.ips) for (k in reg.ips) ips[k] = reg.ips[k];
+        if (reg && reg.maqs) for (k in reg.maqs) maqs[k] = reg.maqs[k];
+        if (reg && reg.hist) for (k in reg.hist) hist[k] = reg.hist[k];
+        ips[ipChave(eu.ip)] = Date.now();
+        if (eu.m) maqs[eu.m] = Date.now();
+        hist[dia] = (typeof hist[dia] === 'number' ? hist[dia] : 0) + 1;
+        var ds = Object.keys(hist).sort();
+        while (ds.length > 120) delete hist[ds.shift()];
+
+        return pedirAoPainel('PUT', 'pcs/' + eu.chave, {
+            nome: (reg && reg.nome) ? reg.nome : (eu.nome || eu.chave),
+            unidade: (reg && reg.unidade) || eu.unidade || '',
+            apelido: (reg && reg.apelido) || eu.apelido || '',
+            estado: estado,
+            n: (reg && typeof reg.n === 'number') ? reg.n + 1 : 1,
+            u: Date.now(), ultimoIP: eu.ip || '',
+            criado: (reg && reg.criado) || Date.now(),
+            ips: ips, maqs: maqs, hist: hist
+        }).then(function () {
+            responder({ tipo: 'adc-verdito', liberado: liberado, estado: estado, chave: eu.chave });
+            if (liberado) {
+                tela('✅', 'Pronto!', 'vd',
+                    '<div class="quem"><b>' + escapar(eu.nome) + '</b>' +
+                    '<span>' + escapar(eu.chave) + '</span></div>' +
+                    '<p>Registrado. Pode fechar esta janelinha e usar o Automatizador normalmente.</p>' +
+                    '<p>Da próxima vez ele já reconhece você, sem perguntar nada.</p>');
+                setTimeout(function () { try { window.close(); } catch (e) { } }, 2500);
+            } else if (estado === 'bloqueado') {
+                tela('⛔', 'Bloqueado', 'vm',
+                    '<div class="quem"><b>' + escapar(eu.nome) + '</b>' +
+                    '<span>' + escapar(eu.chave) + '</span></div>' +
+                    '<p>Este nome foi bloqueado. Se você acha que é engano, fale com o Sandro.</p>');
+            } else {
+                tela('🔒', 'Esperando liberação', 'am',
+                    '<div class="quem"><b>' + escapar(eu.nome) + '</b>' +
+                    '<span>' + escapar(eu.chave) + '</span></div>' +
+                    '<p>O Sandro já recebeu o seu pedido e vai liberar.</p>' +
+                    '<p>Pode deixar esta janelinha aberta: assim que ele liberar, eu aviso aqui.</p>');
+                conferir();
+            }
+        });
+    }).catch(function (e) {
+        // painel fora do ar: ninguém fica parado
+        responder({ tipo: 'adc-verdito', liberado: true, estado: 'ok', chave: eu.chave });
+        tela('⚠️', 'Não consegui falar com o painel', 'am',
+            '<p>' + escapar(e.message) + '</p>' +
+            '<p>Pode usar o Automatizador normalmente — este acesso só não foi contado.</p>');
+    });
+
+    function conferir() {
+        setInterval(function () {
+            pedirAoPainel('GET', 'pcs/' + eu.chave + '/estado').then(function (e) {
+                if (e === 'ok') {
+                    tela('✅', 'Liberado!', 'vd',
+                        '<p>O Sandro liberou.</p>' +
+                        '<p>Feche esta janelinha, volte para o portal e clique de novo no favorito ' +
+                        '<b>🤖 Automatizador</b>. Daqui pra frente ele abre direto.</p>');
+                }
+            }).catch(function () { });
+        }, 15000);
+    }
+})();
+</script>
+</body>
+</html>
