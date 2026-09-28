@@ -140,6 +140,28 @@
     }
 
     // ── descobre o veredito; se demorar demais ou der erro, libera ──────
+    // já com a pessoa identificada: decide e registra o acesso
+    function decidir(eu, cfg, ip) {
+        return pedirAoPainel('GET', 'pcs/' + eu.chave).catch(function () { return null; }).then(function (reg) {
+            var estado = reg ? (reg.estado || 'pendente') : 'pendente';
+            var base = { chave: eu.chave, nome: eu.nome || eu.chave, ip: ip || '', estado: estado };
+            if (estado === 'bloqueado') {
+                return anotar(eu, ip, reg, 'bloqueado').catch(function () { }).then(function () {
+                    base.liberado = false; return base;
+                });
+            }
+            if (cfg.fechado === true && estado !== 'ok') {
+                return anotar(eu, ip, reg, 'pendente').catch(function () { }).then(function () {
+                    base.liberado = false; return base;
+                });
+            }
+            var novo = (estado === 'pendente') ? 'ok' : estado;
+            return anotar(eu, ip, reg, novo).catch(function () { }).then(function () {
+                base.liberado = true; base.estado = novo; return base;
+            });
+        });
+    }
+
     function veredito() {
         var eu = lerGuardado();
         var socorro = new Promise(function (ok) {
@@ -150,25 +172,22 @@
             // cai no catch lá embaixo e ninguém fica parado nem é perguntado
             return pedirAoPainel('GET', 'config').then(function (cfg) {
                 cfg = cfg || {};
-                if (!eu) return { chave: null, ip: ip || '' };   // a página vai perguntar
-                return pedirAoPainel('GET', 'pcs/' + eu.chave).catch(function () { return null; }).then(function (reg) {
-                var estado = reg ? (reg.estado || 'pendente') : 'pendente';
-                var base = { chave: eu.chave, nome: eu.nome || eu.chave, ip: ip || '', estado: estado };
-                if (estado === 'bloqueado') {
-                    return anotar(eu, ip, reg, 'bloqueado').catch(function () { }).then(function () {
-                        base.liberado = false; return base;
+                if (eu) return decidir(eu, cfg, ip);
+                // Ainda não sei quem é. Antes de mandar a página perguntar,
+                // vejo se ESTE COMPUTADOR já se identificou em outro convênio:
+                // a identidade fica guardada no painel, amarrada às
+                // características da máquina.
+                return pedirAoPainel('GET', 'maquinas/' + marcaCurta)
+                    .catch(function () { return null; })
+                    .then(function (m) {
+                        if (!(m && m.chave)) return { chave: null, ip: ip || '' };
+                        eu = {
+                            chave: m.chave, nome: m.nome || m.chave,
+                            unidade: m.unidade || '', apelido: m.apelido || ''
+                        };
+                        try { window.localStorage.setItem('adc.identificacao', JSON.stringify(eu)); } catch (e) { }
+                        return decidir(eu, cfg, ip);
                     });
-                }
-                if (cfg.fechado === true && estado !== 'ok') {
-                    return anotar(eu, ip, reg, 'pendente').catch(function () { }).then(function () {
-                        base.liberado = false; return base;
-                    });
-                }
-                var novo = (estado === 'pendente') ? 'ok' : estado;
-                return anotar(eu, ip, reg, novo).catch(function () { }).then(function () {
-                    base.liberado = true; base.estado = novo; return base;
-                });
-                });
             });
         }).catch(function () { return { falhou: true }; });
 

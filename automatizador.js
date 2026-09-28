@@ -6508,6 +6508,18 @@
             const guardar = o => {
                 try { window.localStorage.setItem(GUARDA, JSON.stringify(o)); } catch (e) { }
             };
+            // O localStorage é separado por site: o que a pessoa escreve no
+            // portal do TJ não existe no portal da PM. Por isso a identidade
+            // também fica guardada NO PAINEL, amarrada às características da
+            // máquina — assim ela é perguntada UMA vez por computador, e vale
+            // para todos os convênios.
+            const salvarMaquina = d => {
+                if (paginaSurda) return Promise.resolve();   // quem grava é a janelinha
+                return pedirAoPainel('PUT', 'maquinas/' + marcaCurta, {
+                    chave: d.chave, nome: d.nome, unidade: d.unidade,
+                    apelido: d.apelido, u: Date.now()
+                }).catch(() => { });
+            };
 
             const daJanela = (() => { try { return window.__adcVerdito || null; } catch (e) { return null; } })();
             const paginaSurda = !!daJanela;   // esta página não fala com ninguém de fora
@@ -6616,6 +6628,30 @@
                     fontSize: '11px', color: '#4e6690', marginTop: '15px',
                     paddingTop: '12px', borderTop: '1px solid rgba(29,53,87,.6)'
                 }, txt));
+            };
+
+            // Avisinho de canto, sem travar nada: aparece quando o
+            // computador foi reconhecido sozinho, e some em 9 segundos.
+            const avisoDeCanto = (texto, rotulo, aoClicar) => {
+                const t = criar('div', {
+                    position: 'fixed', right: '18px', bottom: '18px', zIndex: '2147483646',
+                    background: 'linear-gradient(180deg,#0c1322 0%,#0a0f1c 100%)',
+                    border: '1px solid #1d3557', borderRadius: '12px',
+                    padding: '13px 16px', maxWidth: '320px', boxSizing: 'border-box',
+                    color: '#a8bddf', fontSize: '13px', lineHeight: '1.5',
+                    fontFamily: FONTE, boxShadow: '0 12px 40px rgba(0,0,0,.55)'
+                });
+                t.appendChild(criar('div', { color: '#dbe7ff' }, texto));
+                const b = criar('button', {
+                    marginTop: '9px', padding: '7px 13px', border: '1px solid #1d3557',
+                    borderRadius: '8px', background: 'transparent', color: '#4dc3ff',
+                    fontSize: '12.5px', fontWeight: '700', cursor: 'pointer', fontFamily: FONTE
+                }, rotulo);
+                t.appendChild(b);
+                (document.body || document.documentElement).appendChild(t);
+                const sumir = () => { try { t.remove(); } catch (e) { } };
+                b.addEventListener('click', () => { sumir(); aoClicar(); });
+                window.setTimeout(sumir, 9000);
             };
 
             let eu = null;      // { chave, nome, unidade, apelido }
@@ -6747,6 +6783,7 @@
                         apelido: String(apel.value).trim()
                     };
                     guardar(dados);
+                    salvarMaquina(dados);
                     eu = dados;
                     aoConfirmar(dados, function falhou(msg) {
                         b.disabled = false; b.textContent = 'OK';
@@ -6855,8 +6892,26 @@
                     // Se o painel não responder, a ferramenta abre e não
                     // pergunta nada: o trabalho não para por causa disto.
                     pedirAoPainel('GET', 'config').then(cfg => {
-                        if (guardado) { eu = guardado; conferirEDecidir(cfg); }
-                        else perguntarQuemE(() => conferirEDecidir(cfg));
+                        if (guardado) { eu = guardado; conferirEDecidir(cfg); return; }
+                        // Este portal ainda não conhece a pessoa. Antes de
+                        // perguntar, vê se ESTE COMPUTADOR já se identificou
+                        // em qualquer outro convênio.
+                        pedirAoPainel('GET', 'maquinas/' + marcaCurta)
+                            .catch(() => null)
+                            .then(m => {
+                                if (!(m && m.chave)) { perguntarQuemE(() => conferirEDecidir(cfg)); return; }
+                                eu = {
+                                    chave: m.chave, nome: m.nome || m.chave,
+                                    unidade: m.unidade || '', apelido: m.apelido || ''
+                                };
+                                guardar(eu);
+                                conferirEDecidir(cfg);
+                                avisoDeCanto('Entrando como ' + eu.nome + '.', 'Não sou eu', () => {
+                                    try { window.localStorage.removeItem(GUARDA); } catch (e) { }
+                                    eu = null;
+                                    perguntarQuemE(() => conferirEDecidir(cfg));
+                                });
+                            });
                     }).catch(() => { });
                 }).catch(() => { });
             }

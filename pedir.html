@@ -124,6 +124,14 @@
             criado: (reg && reg.criado) || Date.now(),
             ips: ips, maqs: maqs, hist: hist
         }).then(function () {
+            // guarda a identidade amarrada à MÁQUINA: assim ela vale em
+            // todos os convênios, e a pessoa só é perguntada uma vez.
+            if (eu.m) {
+                pedirAoPainel('PUT', 'maquinas/' + eu.m, {
+                    chave: eu.chave, nome: eu.nome, unidade: eu.unidade,
+                    apelido: eu.apelido, u: Date.now()
+                }).catch(function () { });
+            }
             responder({ tipo: 'adc-verdito', liberado: liberado, estado: estado, chave: eu.chave });
             if (liberado) {
                 tela('✅', 'Pronto!', 'vd',
