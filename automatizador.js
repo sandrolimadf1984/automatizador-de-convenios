@@ -6672,18 +6672,26 @@
                 hist[dia] = (typeof hist[dia] === 'number' ? hist[dia] : 0) + 1;
                 const ds = Object.keys(hist).sort();
                 while (ds.length > 120) delete hist[ds.shift()];
-                return pedirAoPainel('PUT', 'pcs/' + eu.chave, {
+                const corpo = {
                     // o nome só é escrito na criação: se o Sandro renomear
                     // no painel, o acesso seguinte não apaga o que ele pôs
                     nome: (r && r.nome) ? r.nome : eu.nome,
                     unidade: (r && r.unidade) || eu.unidade,
                     apelido: (r && r.apelido) || eu.apelido,
-                    estado: estado,
                     n: (r && typeof r.n === 'number') ? r.n + 1 : 1,
                     u: Date.now(), ultimoIP: meuIP || '',
                     criado: (r && r.criado) || Date.now(),
                     ips: ips, maqs: maqs, hist: hist
-                });
+                };
+                // ── REGRA DE OURO ────────────────────────────────────────
+                // O robô só sabe LIBERAR; nunca sabe tirar liberação.
+                // Se o registro já existe e o estado não é 'ok', ele nem
+                // encosta nesse campo. Assim, se o Sandro clicar em Liberar
+                // no meio do caminho, a liberação NUNCA é apagada por um
+                // acesso que começou antes dela.
+                if (!r || estado === 'ok') corpo.estado = estado;
+                // PATCH junta os campos; só o registro novo é criado inteiro
+                return pedirAoPainel(r ? 'PATCH' : 'PUT', 'pcs/' + eu.chave, corpo);
             };
             const presente = () => {
                 if (emAutomacao() || !eu || paginaSurda) return;

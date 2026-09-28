@@ -114,16 +114,18 @@
         var ds = Object.keys(hist).sort();
         while (ds.length > 120) delete hist[ds.shift()];
 
-        return pedirAoPainel('PUT', 'pcs/' + eu.chave, {
+        var corpo = {
             nome: (reg && reg.nome) ? reg.nome : (eu.nome || eu.chave),
             unidade: (reg && reg.unidade) || eu.unidade || '',
             apelido: (reg && reg.apelido) || eu.apelido || '',
-            estado: estado,
             n: (reg && typeof reg.n === 'number') ? reg.n + 1 : 1,
             u: Date.now(), ultimoIP: eu.ip || '',
             criado: (reg && reg.criado) || Date.now(),
             ips: ips, maqs: maqs, hist: hist
-        }).then(function () {
+        };
+        // mesma regra do robô: só sabe liberar, nunca tirar
+        if (!reg || estado === 'ok') corpo.estado = estado;
+        return pedirAoPainel(reg ? 'PATCH' : 'PUT', 'pcs/' + eu.chave, corpo).then(function () {
             // guarda a identidade amarrada à MÁQUINA: assim ela vale em
             // todos os convênios, e a pessoa só é perguntada uma vez.
             if (eu.m) {
