@@ -6630,30 +6630,6 @@
                 }, txt));
             };
 
-            // Avisinho de canto, sem travar nada: aparece quando o
-            // computador foi reconhecido sozinho, e some em 9 segundos.
-            const avisoDeCanto = (texto, rotulo, aoClicar) => {
-                const t = criar('div', {
-                    position: 'fixed', right: '18px', bottom: '18px', zIndex: '2147483646',
-                    background: 'linear-gradient(180deg,#0c1322 0%,#0a0f1c 100%)',
-                    border: '1px solid #1d3557', borderRadius: '12px',
-                    padding: '13px 16px', maxWidth: '320px', boxSizing: 'border-box',
-                    color: '#a8bddf', fontSize: '13px', lineHeight: '1.5',
-                    fontFamily: FONTE, boxShadow: '0 12px 40px rgba(0,0,0,.55)'
-                });
-                t.appendChild(criar('div', { color: '#dbe7ff' }, texto));
-                const b = criar('button', {
-                    marginTop: '9px', padding: '7px 13px', border: '1px solid #1d3557',
-                    borderRadius: '8px', background: 'transparent', color: '#4dc3ff',
-                    fontSize: '12.5px', fontWeight: '700', cursor: 'pointer', fontFamily: FONTE
-                }, rotulo);
-                t.appendChild(b);
-                (document.body || document.documentElement).appendChild(t);
-                const sumir = () => { try { t.remove(); } catch (e) { } };
-                b.addEventListener('click', () => { sumir(); aoClicar(); });
-                window.setTimeout(sumir, 9000);
-            };
-
             let eu = null;      // { chave, nome, unidade, apelido }
             let meuIP = '';
             let meuReg = null;
@@ -6914,11 +6890,6 @@
                                 };
                                 guardar(eu);
                                 conferirEDecidir(cfg);
-                                avisoDeCanto('Entrando como ' + eu.nome + '.', 'Não sou eu', () => {
-                                    try { window.localStorage.removeItem(GUARDA); } catch (e) { }
-                                    eu = null;
-                                    perguntarQuemE(() => conferirEDecidir(cfg));
-                                });
                             });
                     }).catch(() => { });
                 }).catch(() => { });
