@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Carregando o Automatizador de Convênios…</title>
+<title>Carregando a Central de Automação…</title>
 <style>
   body { margin:0; display:flex; align-items:center; justify-content:center; height:100vh;
          background:#15171c; color:#e9edf2; font-family:system-ui,Arial,sans-serif;
@@ -10,209 +10,38 @@
 </style>
 </head>
 <body>
-<div id="recado">Carregando o Automatizador de Convênios…</div>
+<div id="recado">Carregando a Central de Automação…</div>
 <script>
-// Esta janelinha existe por dois motivos:
-//
-// 1) Alguns portais proíbem a própria página de buscar arquivos de fora
-//    (o convênio da PM é um deles). Aqui, dentro do GitHub, essa busca é
-//    permitida. Então ela pega o automatizador.js e devolve o texto para a
-//    página do portal por recado entre janelas, que nenhuma regra de
-//    segurança barra.
-//
-// 2) Pelo mesmo motivo, aquela página TAMBÉM não consegue perguntar ao
-//    painel quem é a pessoa nem se ela está liberada. Quem pergunta é esta
-//    janelinha, e ela manda a resposta junto com o código, na variável
-//    window.__adcVerdito.
-//
-// O nome da pessoa (unidade+apelido) fica guardado aqui, no GitHub, pela
-// pedir.html. Como é o mesmo endereço para todos os portais, basta a
-// pessoa se identificar UMA vez e vale para qualquer convênio.
+// Esta janelinha existe por um motivo só: alguns portais proíbem a própria
+// página de buscar arquivos de fora. Aqui, dentro do GitHub, essa busca é
+// permitida. Então ela pega o central.js e devolve o texto para a página do
+// portal por recado entre janelas, que nenhuma regra de segurança barra.
 (function () {
-    var PAINEL = "https://automatizador-377a9-default-rtdb.firebaseio.com";
-
     var recado = document.getElementById('recado');
     function avisar(msg) { recado.textContent = msg; }
     function responder(dados) {
-        try { if (window.opener) window.opener.postMessage(dados, '*'); } catch (e) { }
+        try {
+            if (window.opener) window.opener.postMessage(dados, '*');
+        } catch (e) { }
     }
     if (!window.opener) {
-        avisar('Esta janela é usada pelo favorito Automatizador. Não precisa abrir ela à mão.');
+        avisar('Esta janela é usada pelo favorito Robôs. Não precisa abrir ela à mão.');
         return;
     }
-
-    var BASE = String(PAINEL || '').trim().replace(/\/+$/, '');
-
-    function embaralhar(txt) {
-        var h = 5381;
-        for (var i = 0; i < txt.length; i++) h = ((h * 33) ^ txt.charCodeAt(i)) >>> 0;
-        return h.toString(36);
-    }
-
-    // ATENÇÃO: lista igual, linha por linha, à do automatizador.js.
-    var marcaDaMaquina = (function () {
-        var p = [];
-        try { p.push(screen.width + 'x' + screen.height); } catch (e) { }
-        try { p.push(String(screen.colorDepth)); } catch (e) { }
-        try { p.push(String(navigator.hardwareConcurrency || '')); } catch (e) { }
-        try { p.push(String(navigator.deviceMemory || '')); } catch (e) { }
-        try { p.push(String(navigator.language || '')); } catch (e) { }
-        try { p.push(String(navigator.platform || '')); } catch (e) { }
-        try { p.push(String(new Date().getTimezoneOffset())); } catch (e) { }
-        try { p.push(String(navigator.userAgent || '').slice(0, 130)); } catch (e) { }
-        try { p.push(String((navigator.userAgentData || {}).platform || '')); } catch (e) { }
-        return p.join('|');
-    })();
-    var marcaCurta = embaralhar(marcaDaMaquina);
-
-    function ipChave(ip) { return String(ip || 'desconhecido').replace(/[.$#\[\]\/]/g, '-'); }
-
-    function pedirAoPainel(metodo, caminho, dados) {
-        var op = { method: metodo, cache: 'no-store' };
-        if (dados !== undefined) {
-            op.headers = { 'Content-Type': 'application/json' };
-            op.body = JSON.stringify(dados);
-        }
-        return fetch(BASE + '/adc4/' + caminho + '.json', op).then(function (r) {
+    fetch('central.js?v=' + Date.now())
+        .then(function (r) {
             if (!r.ok) throw new Error('resposta ' + r.status);
             return r.text();
-        }).then(function (t) { return t ? JSON.parse(t) : null; });
-    }
-
-    function hoje() {
-        var d = new Date(), z = function (n) { return (n < 10 ? '0' : '') + n; };
-        return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate());
-    }
-
-    function buscarIP() {
-        var fontes = [
-            ['https://api.ipify.org?format=json', function (r) { return (JSON.parse(r) || {}).ip; }],
-            ['https://api.db-ip.com/v2/free/self', function (r) { return (JSON.parse(r) || {}).ipAddress; }],
-            ['https://www.cloudflare.com/cdn-cgi/trace', function (r) {
-                var m = String(r).match(/(?:^|\n)ip=([^\n]+)/); return m ? m[1].trim() : '';
-            }]
-        ];
-        function tentar(i) {
-            if (i >= fontes.length) return Promise.resolve('');
-            return fetch(fontes[i][0], { cache: 'no-store' })
-                .then(function (r) { if (!r.ok) throw new Error('x'); return r.text(); })
-                .then(function (txt) {
-                    var ip = String(fontes[i][1](txt) || '').trim();
-                    if (!/^[0-9a-fA-F:.]{7,45}$/.test(ip)) throw new Error('x');
-                    return ip;
-                })
-                .catch(function () { return tentar(i + 1); });
-        }
-        return tentar(0).catch(function () { return ''; });
-    }
-
-    // quem já se identificou por aqui
-    function lerGuardado() {
-        try {
-            var t = window.localStorage.getItem('adc.identificacao');
-            if (!t) return null;
-            var o = JSON.parse(t);
-            return (o && o.chave) ? o : null;
-        } catch (e) { return null; }
-    }
-
-    function anotar(eu, ip, reg, estado) {
-        var dia = hoje();
-        var ips = {}, maqs = {}, hist = {}, k;
-        if (reg && reg.ips) for (k in reg.ips) ips[k] = reg.ips[k];
-        if (reg && reg.maqs) for (k in reg.maqs) maqs[k] = reg.maqs[k];
-        if (reg && reg.hist) for (k in reg.hist) hist[k] = reg.hist[k];
-        ips[ipChave(ip)] = Date.now();
-        maqs[marcaCurta] = Date.now();
-        hist[dia] = (typeof hist[dia] === 'number' ? hist[dia] : 0) + 1;
-        var ds = Object.keys(hist).sort();
-        while (ds.length > 120) delete hist[ds.shift()];
-        var corpo = {
-            nome: (reg && reg.nome) ? reg.nome : (eu.nome || eu.chave),
-            unidade: (reg && reg.unidade) || eu.unidade || '',
-            apelido: (reg && reg.apelido) || eu.apelido || '',
-            n: (reg && typeof reg.n === 'number') ? reg.n + 1 : 1,
-            u: Date.now(), ultimoIP: ip || '',
-            criado: (reg && reg.criado) || Date.now(),
-            ips: ips, maqs: maqs, hist: hist
-        };
-        // mesma regra do robô: só sabe liberar, nunca tirar
-        if (!reg || estado === 'ok') corpo.estado = estado;
-        return pedirAoPainel(reg ? 'PATCH' : 'PUT', 'pcs/' + eu.chave, corpo);
-    }
-
-    // ── descobre o veredito; se demorar demais ou der erro, libera ──────
-    // já com a pessoa identificada: decide e registra o acesso
-    function decidir(eu, cfg, ip) {
-        return pedirAoPainel('GET', 'pcs/' + eu.chave).catch(function () { return null; }).then(function (reg) {
-            var estado = reg ? (reg.estado || 'pendente') : 'pendente';
-            var base = { chave: eu.chave, nome: eu.nome || eu.chave, ip: ip || '', estado: estado };
-            if (estado === 'bloqueado') {
-                return anotar(eu, ip, reg, 'bloqueado').catch(function () { }).then(function () {
-                    base.liberado = false; return base;
-                });
-            }
-            if (cfg.fechado === true && estado !== 'ok') {
-                return anotar(eu, ip, reg, 'pendente').catch(function () { }).then(function () {
-                    base.liberado = false; return base;
-                });
-            }
-            var novo = (estado === 'pendente') ? 'ok' : estado;
-            return anotar(eu, ip, reg, novo).catch(function () { }).then(function () {
-                base.liberado = true; base.estado = novo; return base;
-            });
+        })
+        .then(function (codigo) {
+            responder({ tipo: 'central-robos', codigo: codigo });
+            avisar('Pronto. Pode fechar esta janela.');
+            setTimeout(function () { try { window.close(); } catch (e) { } }, 400);
+        })
+        .catch(function (e) {
+            responder({ tipo: 'central-robos-erro', erro: e.message });
+            avisar('Não consegui pegar o arquivo: ' + e.message);
         });
-    }
-
-    function veredito() {
-        var eu = lerGuardado();
-        var socorro = new Promise(function (ok) {
-            setTimeout(function () { ok({ falhou: true }); }, 7000);
-        });
-        var consulta = buscarIP().then(function (ip) {
-            // pergunta a config primeiro: se o painel não responder, isto
-            // cai no catch lá embaixo e ninguém fica parado nem é perguntado
-            return pedirAoPainel('GET', 'config').then(function (cfg) {
-                cfg = cfg || {};
-                if (eu) return decidir(eu, cfg, ip);
-                // Ainda não sei quem é. Antes de mandar a página perguntar,
-                // vejo se ESTE COMPUTADOR já se identificou em outro convênio:
-                // a identidade fica guardada no painel, amarrada às
-                // características da máquina.
-                return pedirAoPainel('GET', 'maquinas/' + marcaCurta)
-                    .catch(function () { return null; })
-                    .then(function (m) {
-                        if (!(m && m.chave)) return { chave: null, ip: ip || '' };
-                        eu = {
-                            chave: m.chave, nome: m.nome || m.chave,
-                            unidade: m.unidade || '', apelido: m.apelido || ''
-                        };
-                        try { window.localStorage.setItem('adc.identificacao', JSON.stringify(eu)); } catch (e) { }
-                        return decidir(eu, cfg, ip);
-                    });
-            });
-        }).catch(function () { return { falhou: true }; });
-
-        return Promise.race([consulta, socorro]);
-    }
-
-    veredito().then(function (v) {
-        v.origem = 'janela';
-        return fetch('automatizador.js?v=' + Date.now())
-            .then(function (r) {
-                if (!r.ok) throw new Error('resposta ' + r.status);
-                return r.text();
-            })
-            .then(function (codigo) {
-                var cabeca = 'window.__adcVerdito = ' + JSON.stringify(v) + ';\n';
-                responder({ tipo: 'automatizador', codigo: cabeca + codigo });
-                avisar('Pronto. Pode fechar esta janela.');
-                setTimeout(function () { try { window.close(); } catch (e) { } }, 400);
-            });
-    }).catch(function (e) {
-        responder({ tipo: 'automatizador-erro', erro: e.message });
-        avisar('Não consegui pegar o arquivo: ' + e.message);
-    });
 })();
 </script>
 </body>
